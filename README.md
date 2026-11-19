@@ -63,7 +63,7 @@ ctest --test-dir build -C Release
 ## Roadmap
 
 1. **Skeleton & CI** ← *done*
-2. Stage 1 DSP (multi-tap, tempo sync, tap math tests)
+2. **Stage 1 DSP** (multi-tap, tempo sync, tap math tests) ← *done*
 3. Volume and pan grids
 4. Patterns: 8 slots, switching, state, undo/redo, randomisation
 5. Stage 2 (feedback) and sound modes
