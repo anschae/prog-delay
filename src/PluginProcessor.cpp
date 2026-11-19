@@ -207,12 +207,15 @@ juce::AudioProcessorEditor* ProgDelayProcessor::createEditor()
 
 juce::ValueTree ProgDelayProcessor::captureState()
 {
-    return StateSerializer::makeState (apvts, bank);
+    auto st = StateSerializer::makeState (apvts, bank);
+    st.setProperty ("presetName", currentPresetName, nullptr);
+    return st;
 }
 
 void ProgDelayProcessor::restoreState (const juce::ValueTree& state)
 {
-    StateSerializer::applyState (state, apvts, bank);
+    if (StateSerializer::applyState (state, apvts, bank) && state.hasProperty ("presetName"))
+        currentPresetName = state.getProperty ("presetName").toString();
     publishPatterns();
 }
 

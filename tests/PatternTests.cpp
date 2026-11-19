@@ -337,3 +337,23 @@ TEST_CASE ("Factory presets load", "[state]")
     CHECK (p.getBank().getPattern (0).sig == TimeSig { 7, 8 });
     CHECK (juce::roundToInt (p.getApvts().getRawParameterValue (pid::switchSource)->load()) == 1);
 }
+
+#if PD_MIDI_SWITCHING
+TEST_CASE ("MIDI program change and notes C1-G1 select patterns", "[switching][midi]")
+{
+    ProgDelayProcessor proc;
+    auto* src = proc.getApvts().getParameter (pid::switchSource);
+    src->setValueNotifyingHost (src->convertTo0to1 (2.0f));  // MIDI
+    proc.prepareToPlay (48000.0, 256);
+    juce::AudioBuffer<float> buf (4, 256);
+    buf.clear();
+    juce::MidiBuffer midi;
+    midi.addEvent (juce::MidiMessage::programChange (1, 2), 0);
+    proc.processBlock (buf, midi);
+    CHECK (proc.getEngine().playingPattern.load() == 2);
+    midi.clear();
+    midi.addEvent (juce::MidiMessage::noteOn (1, 36 + 6, (juce::uint8) 100), 10);  // F#1 -> pattern 7
+    proc.processBlock (buf, midi);
+    CHECK (proc.getEngine().playingPattern.load() == 6);
+}
+#endif

@@ -279,19 +279,17 @@ void FeedbackSection::paint (juce::Graphics& g)
     g.setColour (textFaint);
     g.setFont (font (11.0f));
     g.drawText ("repeats", r.removeFromLeft (56), juce::Justification::centredLeft);
+    r.removeFromTop (2);
     const float fb = proc.getApvts().getRawParameterValue (pid::feedback)->load() * 0.01f;
+    const int count = 12;
+    const float slot = (float) r.getWidth() / (float) count;
     float lvl = 1.0f;
-    const float slot = (float) r.getWidth() / 8.0f;
-    for (int k = 0; k < 8; ++k)
+    for (int k = 0; k < count; ++k)
     {
+        const float h = std::max (1.5f, lvl * (float) r.getHeight());
+        g.setColour ((k == 0 ? text : straight).withAlpha (k == 0 ? 0.5f : 0.3f + 0.7f * lvl));
+        g.fillRoundedRectangle (r.getX() + k * slot + slot * 0.25f, (float) r.getBottom() - h, slot * 0.5f, h, 1.5f);
         lvl *= fb;
-        const float h = juce::jlimit (1.0f, (float) r.getHeight(), lvl * (float) r.getHeight());
-        g.setColour (straight.withAlpha (0.25f + 0.6f * lvl));
-        for (int j = 0; j < 3; ++j)
-        {
-            const float hh = h * (1.0f - 0.25f * (float) j);
-            g.fillRect (r.getX() + k * slot + j * 6.0f, (float) r.getBottom() - hh, 4.0f, hh);
-        }
     }
 }
 

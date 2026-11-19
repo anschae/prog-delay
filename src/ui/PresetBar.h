@@ -5,24 +5,22 @@ namespace progdelay
 {
 class ProgDelayProcessor;
 
-/** Preset browser + A/B compare (filled in by milestone 7). */
-class PresetBar : public juce::Component
+/** Preset browser (prev / name menu / next) and A/B compare. */
+class PresetBar : public juce::Component, private juce::Timer
 {
 public:
-    explicit PresetBar (ProgDelayProcessor& p) : proc (p) {}
-    void paint (juce::Graphics& g) override
-    {
-        auto r = getLocalBounds().toFloat().reduced (0.5f);
-        g.setColour (theme::control);
-        g.fillRoundedRectangle (r, 6.0f);
-        g.setColour (theme::panelEdge);
-        g.drawRoundedRectangle (r, 6.0f, 1.0f);
-        g.setColour (theme::text);
-        g.setFont (theme::font (14.0f));
-        g.drawText ("Init", getLocalBounds(), juce::Justification::centred);
-    }
+    explicit PresetBar (ProgDelayProcessor& p);
+    ~PresetBar() override;
+    void resized() override;
 
 private:
+    void timerCallback() override;
+    void showMenu();
+    void askSaveName();
+    void refresh();
+
     ProgDelayProcessor& proc;
+    juce::TextButton prev { juce::CharPointer_UTF8 ("\xe2\x97\x82") }, next { juce::CharPointer_UTF8 ("\xe2\x96\xb8") }, name;
+    Segmented ab { juce::StringArray { "A", "B" } };
 };
 } // namespace progdelay

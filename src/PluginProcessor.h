@@ -3,6 +3,7 @@
 #include "Parameters.h"
 #include "dsp/Engine.h"
 #include "model/PatternBank.h"
+#include "model/PresetManager.h"
 
 namespace progdelay
 {
@@ -47,6 +48,10 @@ public:
     juce::ValueTree captureState();
     void restoreState (const juce::ValueTree& state);
 
+    PresetManager& getPresets() noexcept { return presets; }
+    juce::String getCurrentPresetName() const { return currentPresetName; }
+    void setCurrentPresetName (const juce::String& n) { currentPresetName = n; }
+
     /** Rebuilds the audio snapshot from the pattern tree (message thread). */
     void publishPatterns();
 
@@ -63,6 +68,8 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     PatternBank bank;
     Engine engine;
+    PresetManager presets { *this };
+    juce::String currentPresetName { "Factory / Init" };
     juce::SpinLock publishLock;
 
     std::atomic<float>* raw (const char* id) const { return apvts.getRawParameterValue (id); }

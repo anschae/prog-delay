@@ -12,6 +12,12 @@ up to date with every change: later sessions rely on it instead of re-reading th
 - M5 stage 2 + sound modes: done (FeedbackStage, ModeHost crossfade, Color reflections; tests in
   tests/FeedbackTests.cpp).
 - M6 ducking: done (Ducker + DuckingDisplay, sidechain bus, lookahead latency; tests in tests/DuckerTests.cpp).
+- M7 polish: done (PresetManager + PresetBar with factory/user presets and A/B, tooltips, repeats
+  preview, pluginval strictness 10 in CI). Perf (Linux, RelWithDebInfo, 48 kHz stereo, fb + tape +
+  colour + ducking): 16 taps 1.5 %, 64 taps 3.5 %, 256 taps 10 % of one core (`ProgDelayTests "[.perf]"`).
+- M8 MIDI switching: done behind `PD_MIDI_SWITCHING` (processor parses program change 0-7 and notes
+  36-43 = C1-G1; test in PatternTests.cpp under `#if PD_MIDI_SWITCHING`). UI disables the MIDI
+  button in the default build.
 - M3 grids: done. Full editor layout (header, tabs, toolbar, volume/pan grids, randomize panel, bottom
   sections). Sound mode classes are registered (DSP used from M5 on).
 
@@ -140,6 +146,17 @@ duckRms duckThresh duckDepth duckFull duckKnee duckAttack duckHold duckRelease d
 duckRelNote duckLook duckTarget duckPos tempoMode manualBpm activePattern switchSource switchQuant
 fallbackPattern`. Never rename IDs. Choice enums in `Parameters.h`.
 
+## Presets / A-B
+- `model/PresetManager.*` (owned by the processor, so A/B survives closing the editor): factory
+  presets from `FactoryPresets::all()` (built in code), user presets = XML state files `*.pdpreset`
+  in `userApplicationDataDirectory/anschae/Prog Delay/Presets` (tests use `setUserFolderOverride`).
+  Current preset name ("Factory / X", "User / Y") lives in the processor and in the state
+  (`presetName` property on the root). A/B = two captured state trees; switching captures the
+  active one and restores the other (B starts as a copy). Loading a preset or A/B clears pattern
+  undo history (PatternBank::replaceAll).
+- Factory presets: Init, 7/8 Djent Stab, Polyrhythm 3 over 4, Dotted Ambience, Gallop Slap,
+  Odd Meter Switcher, Lo-Fi Ghosts. Params not listed in a preset fall back to defaults.
+
 ## State format
 See `StateSerializer.h`: root `ProgDelayState` (stateVersion, soundModeId) with the APVTS child
 `PARAMS` and the `PATTERNS` tree. Binary XML. The sound mode is restored by its ID.
@@ -152,3 +169,23 @@ Dependency downloads cached in `.deps/`. Pluginval strictness: `PLUGINVAL_STRICT
 
 ## Known issues / decisions
 - JUCE 8.0.15 as the spec asks (IRene uses JUCE 9).
+- Not yet tested by a person in Cubase / Logic; only pluginval, auval and unit tests.
+- Stage-2 bar length capped at 32 s (memory); longer manual bars at slow tempos are clamped.
+- Stage 1 sums the input to mono before the taps (each tap is panned); stereo width afterwards.
+- `setStateInformation` touches the PATTERNS ValueTree; hosts normally call it on the message
+  thread (ValueTree is not thread-safe).
+- Latency changes (lookahead) are reported from a 10 Hz message-thread timer.
+- Follow sig. matching is exact (num and den): 6/8 does not match 3/4.
+- Quantize Beat/Bar when the transport is stopped switches immediately.
+- Snap "Trip." in Combined mode includes triplet steps that coincide with beats (created as straight).
+- Peak detector = instant attack, 20 ms decay envelope; RMS = one-pole mean square (approximate window).
+- The MIDI build's Logic routing (instrument slot, side-chain audio) is untested.
+- System fonts (no embedded font), so text widths differ slightly between platforms.
+
+## Backlog hooks (from the spec, not implemented)
+Per-reflection extras (filters, feedback send, probability, micro offset, reverse, pitch): extend
+`Reflection` + `TapData` and the tap loop in `MultiTapStage::process`. Euclidean fill / dotted /
+quintuplet / septuplet grids: `GridMode` + `PatternBank::gridPositions` (ticks already divisible).
+Per-pattern feedback: add fields to `Pattern`/`PatternAudio`, read in `Engine::process`.
+Freeze: feedback 1 + bypass softclip/filters + stop writing s1 in `FeedbackStage`. Band-limited
+ducking: see Ducking above. Spillover on bypass, MIDI learn.

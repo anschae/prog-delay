@@ -61,9 +61,9 @@ int main (int argc, char* argv[])
 
     progdelay::ProgDelayProcessor proc;
     const juce::String presetName = argc > 2 ? juce::String (argv[2]) : juce::String ("7/8 Djent Stab");
-    for (const auto& fp : progdelay::FactoryPresets::all())
-        if (fp.name == presetName)
-            proc.restoreState (fp.state);
+    for (const auto& e : proc.getPresets().list())
+        if (e.name == presetName)
+            proc.getPresets().load (e);
 
     FakePlayHead ph;
     proc.setPlayHead (&ph);
