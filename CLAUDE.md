@@ -9,6 +9,8 @@ up to date with every change: later sessions rely on it instead of re-reading th
   serializer, pattern bank model.
 - M4 patterns: done (8 slots, automation / follow-sig switching, quantize, tail-preserving switching,
   state round trip, undo/redo, randomization; tests in tests/PatternTests.cpp).
+- M5 stage 2 + sound modes: done (FeedbackStage, ModeHost crossfade, Color reflections; tests in
+  tests/FeedbackTests.cpp).
 - M3 grids: done. Full editor layout (header, tabs, toolbar, volume/pan grids, randomize panel, bottom
   sections). Sound mode classes are registered (DSP used from M5 on).
 
@@ -90,6 +92,25 @@ tools/Snapshot.cpp      renders the editor to PNG (`xvfb-run -a .../ProgDelaySna
 - **Chunks:** the engine processes in chunks of ≤ 64 samples (any host block size works).
 - **Mix law:** dry amount `min(1, 2(1-mix))`, wet `min(1, 2 mix)` (dry stays at unity up to 50 %).
 - Reflections beyond the grid length stay in the data (non-destructive) but are not played/drawn.
+- **Stage 2** (`FeedbackStage`): stereo buffer holds `s1 + s2`; per sample: read at `t - B - mod`
+  (B crossfaded via DelayTimeXfade, glide if the mode `prefersGlide()`; `mod` = mode's
+  `getDelayModulationSamples`, sampled once per chunk and interpolated) → ping-pong swap / mono →
+  × feedback → low cut / high cut (TPT SVF 12 dB/oct) → `ModeHost` → `softClip` → s2; write s1+s2.
+  B = feedback bar (host signature or manual num/den) × samples per whole, clamped to
+  [72 samples, 32 s] (spec allows 16 wholes at 30 BPM = 128 s; capped to keep memory sane).
+- **Sound modes:** `ModeHost` owns one prepared instance of every registered mode (two hosts: the
+  loop and "Color reflections" on stage 1), switching crossfades over 30 ms. Mode parameter index
+  = registry index; the state stores the mode ID too.
+  **Adding a mode:** write `class FooMode : public SoundMode` in `src/dsp/modes/FooMode.h`
+  (getId stable lower-case, getDisplayName, prepare/reset/process, optional
+  getDelayModulationSamples / prefersGlide) and append `add<FooMode>();` in
+  `SoundModeRegistry.cpp`. The parameter choice list and the UI buttons are built from the registry.
+  Never reorder or remove entries (old projects store the index). Macros: character/age 0..1,
+  tone -1..1 (param ±6 dB / 6).
+- Modes: Digital (none), Tape (asym. tanh saturation, 2×SVF HF loss, wow 0.55 Hz + flutter 6.3 Hz
+  + drift, signal-gated hiss, glide), Analog/BBD (pre/post LP, S&H clock 46→16 kHz, compander with
+  fast/slow envelope mismatch, triangle chorus 90° apart, gated noise), Lo-Fi (HP/LP band-limit,
+  S&H 26→5 kHz with age jitter, 15→5 bits, wobble).
 
 ## Parameters (APVTS, version hint 1)
 `mix dry wet killDry width feedback fbBarMode fbBarNum fbBarDen s1Level s2Level lowCut highCut

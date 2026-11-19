@@ -25,6 +25,17 @@ ProgDelayProcessor::ProgDelayProcessor()
     pSwitchQuant = raw (pid::switchQuant);
     pFallback = raw (pid::fallback);
     pFeedback = raw (pid::feedback);
+    c_age = raw (pid::age);
+    c_character = raw (pid::character);
+    c_colorRefl = raw (pid::colorRefl);
+    c_fbBarDen = raw (pid::fbBarDen);
+    c_fbBarMode = raw (pid::fbBarMode);
+    c_fbBarNum = raw (pid::fbBarNum);
+    c_highCut = raw (pid::highCut);
+    c_lowCut = raw (pid::lowCut);
+    c_soundMode = raw (pid::soundMode);
+    c_stereoMode = raw (pid::stereoMode);
+    c_tone = raw (pid::tone);
 
     bank.getTree().addListener (this);
     publishPatterns();
@@ -85,6 +96,18 @@ Engine::Settings ProgDelayProcessor::readSettings() const noexcept
     s.switchSource = (SwitchSource) juce::roundToInt (pSwitchSource->load());
     s.switchQuant = (SwitchQuant) juce::roundToInt (pSwitchQuant->load());
     s.fallbackPattern = juce::roundToInt (pFallback->load()) - 1;
+    s.feedback = pFeedback->load() * 0.01f;
+    s.fbBarMode = (FbBarMode) juce::roundToInt (c_fbBarMode->load());
+    s.fbNum = juce::roundToInt (c_fbBarNum->load());
+    s.fbDen = kFbDenominators[juce::jlimit (0, 3, juce::roundToInt (c_fbBarDen->load()))];
+    s.lowCut = c_lowCut->load();
+    s.highCut = c_highCut->load();
+    s.stereo = (StereoMode) juce::roundToInt (c_stereoMode->load());
+    s.modeIndex = juce::roundToInt (c_soundMode->load());
+    s.character = c_character->load() * 0.01f;
+    s.age = c_age->load() * 0.01f;
+    s.tone = c_tone->load() / 6.0f;
+    s.colorRefl = c_colorRefl->load() > 0.5f;
     return s;
 }
 
@@ -120,7 +143,16 @@ void ProgDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 double ProgDelayProcessor::getTailLengthSeconds() const
 {
     const double bpm = std::max (30.0, (double) engine.bpmDisplay.load());
-    return 4.0 * secondsPerWhole (bpm);  // longest stage-1 grid
+    double tail = 4.0 * secondsPerWhole (bpm);  // longest stage-1 grid
+    const double fb = pFeedback->load() * 0.01;
+    if (fb > 0.0)
+    {
+        // repeats until -60 dB (the soft clipper keeps 100 % bounded, not decaying: cap)
+        const double repeats = fb >= 0.999 ? 1.0e9 : std::ceil (std::log (0.001) / std::log (fb));
+        const double bar = engine.getFeedbackBarSamples() / std::max (1.0, engine.getSampleRate());
+        tail += std::min (120.0, repeats * bar);
+    }
+    return std::min (tail, 150.0);
 }
 
 juce::AudioProcessorEditor* ProgDelayProcessor::createEditor()

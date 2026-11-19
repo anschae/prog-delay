@@ -16,7 +16,9 @@ void Engine::prepare (double sr, int /*maxBlockSize*/)
 {
     sampleRate = sr;
     stage1.prepare (sr);
-    for (auto* v : { &dryGain, &wetGain, &s1Gain, &widthS })
+    stage2.prepare (sr);
+    colorHost.prepare (sr);
+    for (auto* v : { &dryGain, &wetGain, &s1Gain, &s2Gain, &widthS, &colorMix })
         v->reset (sr, 0.02);
     reset();
 }
@@ -24,6 +26,8 @@ void Engine::prepare (double sr, int /*maxBlockSize*/)
 void Engine::reset()
 {
     stage1.reset();
+    stage2.reset();
+    colorHost.reset();
     switcher.reset (stage1.getActivePattern());
     if (! bankInitialised)
     {
@@ -52,7 +56,23 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
     // ---- tempo
     clock.update (host, s.tempoMode == TempoMode::Manual, s.manualBpm);
     const double spw = samplesPerWhole (clock.getBpm(), sampleRate);
-    stage1.setSamplesPerWhole (spw, false);
+    colorHost.setMode (s.modeIndex);
+    stage1.setSamplesPerWhole (spw, s.colorRefl && colorHost.prefersGlide());
+
+    FeedbackStage::Params fp;
+    fp.feedback = juce::jlimit (0.0f, 1.0f, s.feedback);
+    const int barT = s.fbBarMode == FbBarMode::Manual ? barTicks (s.fbNum, s.fbDen)
+                                                      : barTicks (clock.getSigNum(), clock.getSigDen());
+    fp.barSamples = barT * spw / TICKS_PER_WHOLE;
+    lastBarSamples = fp.barSamples;
+    fp.stereo = s.stereo;
+    fp.lowCutHz = s.lowCut;
+    fp.highCutHz = s.highCut;
+    fp.modeIndex = s.modeIndex;
+    fp.mode.character = s.character;
+    fp.mode.age = s.age;
+    fp.mode.tone = s.tone;
+    fp.mode.bpm = clock.getBpm();
 
     // ---- pattern edits
     if (! stage1.isSnapshotFading())
@@ -76,6 +96,8 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
     dryGain.setTargetValue (s.killDry ? 0.0f : dryAmt * dbToGainWithFloor (s.dryDb));
     wetGain.setTargetValue (wetAmt * dbToGainWithFloor (s.wetDb));
     s1Gain.setTargetValue (dbToGainWithFloor (s.s1Db));
+    s2Gain.setTargetValue (dbToGainWithFloor (s.s2Db));
+    colorMix.setTargetValue (s.colorRefl ? 1.0f : 0.0f);
     widthS.setTargetValue (s.width);
 
     auto* outL = buffer.getWritePointer (0);
@@ -98,11 +120,28 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
 
         stage1.process (mono.data(), s1L.data(), s1R.data(), n);
 
+        // "Color reflections": the sound mode on stage 1 too (crossfaded on/off)
+        if (colorMix.getCurrentValue() > 0.0f || colorMix.isSmoothing())
+        {
+            std::copy (s1L.begin(), s1L.begin() + n, colL.begin());
+            std::copy (s1R.begin(), s1R.begin() + n, colR.begin());
+            colorHost.process (colL.data(), colR.data(), n, fp.mode);
+            for (int i = 0; i < n; ++i)
+            {
+                const float c = colorMix.getNextValue();
+                s1L[(size_t) i] += c * (colL[(size_t) i] - s1L[(size_t) i]);
+                s1R[(size_t) i] += c * (colR[(size_t) i] - s1R[(size_t) i]);
+            }
+        }
+
+        stage2.process (s1L.data(), s1R.data(), s2L.data(), s2R.data(), n, fp);
+
         for (int i = 0; i < n; ++i)
         {
             const float g1 = s1Gain.getNextValue();
-            float wl = s1L[(size_t) i] * g1;
-            float wr = s1R[(size_t) i] * g1;
+            const float g2 = s2Gain.getNextValue();
+            float wl = s1L[(size_t) i] * g1 + s2L[(size_t) i] * g2;
+            float wr = s1R[(size_t) i] * g1 + s2R[(size_t) i] * g2;
 
             const float w = widthS.getNextValue();
             const float mid = 0.5f * (wl + wr);

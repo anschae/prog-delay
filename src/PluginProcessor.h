@@ -67,6 +67,7 @@ private:
 
     std::atomic<float> *pMix, *pDry, *pWet, *pKillDry, *pWidth, *pS1, *pS2, *pTempoMode, *pManualBpm,
                        *pActive, *pSwitchSource, *pSwitchQuant, *pFallback, *pFeedback;
+    std::atomic<float> *c_age = nullptr, *c_character = nullptr, *c_colorRefl = nullptr, *c_fbBarDen = nullptr, *c_fbBarMode = nullptr, *c_fbBarNum = nullptr, *c_highCut = nullptr, *c_lowCut = nullptr, *c_soundMode = nullptr, *c_stereoMode = nullptr, *c_tone = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProgDelayProcessor)
 };
