@@ -6,7 +6,9 @@ up to date with every change: later sessions rely on it instead of re-reading th
 ## Status
 - M1 skeleton & CI: done (CI green on Linux/macOS/Windows).
 - M2 stage 1 DSP: done. Engine with multi-tap stage, tempo sync/manual, pattern switcher, state
-  serializer, pattern bank model. Editor is still a placeholder.
+  serializer, pattern bank model.
+- M3 grids: done. Full editor layout (header, tabs, toolbar, volume/pan grids, randomize panel, bottom
+  sections). Sound mode classes are registered (DSP used from M5 on).
 
 ## Build
 ```sh
@@ -41,8 +43,30 @@ src/model/Pattern.*     Reflection/Pattern structs, ValueTree IDs (namespace ids
 src/model/PatternBank.* undoable editing operations on the PATTERNS tree, snapshot building
 src/model/BankSnapshot.h audio-thread pattern data + TripleBuffer
 src/model/StateSerializer.* state format
+src/model/FactoryPresets.* built-in presets as full state trees
+src/ui/                 PluginEditor's MainView children (see UI below)
 tests/                  Catch2 (own main with ScopedJuceInitialiser_GUI)
+tools/Snapshot.cpp      renders the editor to PNG (`xvfb-run -a .../ProgDelaySnapshot /tmp/snap [preset]`)
 ```
+
+## UI
+- `MainView` is laid out at a fixed design size 1280×820; `ProgDelayEditor` scales it with an
+  AffineTransform (resizable 75–150 %, fixed aspect ratio). All coordinates in `MainView::resized()`.
+- `GridModel` (ui/GridModel.*) is shared by both grids: cached edited `Pattern`, selection, geometry
+  (`tickToX` with gutters `kGutterLeft/Right`, so both grids' columns line up), live info (host sig,
+  flashes). Its `onChange` repaints tabs/toolbar/grids.
+- `VolumeGrid` interactions: click empty → add (volume from y) and enter paint mode (drag across
+  empty positions paints, staying in a column sets its volume); drag a bar → relative volume
+  (Shift fine); Alt-drag → move in time (snaps, skips occupied); double/right-click → delete;
+  Delete key → delete selection. `PanGrid`: drag existing only, double-click centres.
+- Bar markers: host signature dashed green (`GridBase::drawVerticalLines`), pattern signature solid
+  in the pattern colour. Off-grid reflections are drawn outlined.
+- Flash: engine `tapLevels[i]` (peak of tap i of the playing pattern, index = sorted tick order) →
+  `GridPanel::timerCallback` decays them into `GridModel::flash`.
+- Widgets: `Knob` (param or callback, double-click = type value), `Segmented` (choice param or
+  callback), `ChipToggle`, `SwitchToggle`. Look in `ui/LookAndFeel.*`, colours in `ui/Theme.h`.
+- Buttons can carry an "accent" property (colour string) used by the LookAndFeel when toggled on.
+- Non-ASCII UI strings must be written as `juce::CharPointer_UTF8 ("\x..")` (MSVC + JUCE assert).
 
 ## Core concepts
 - **Ticks:** every position is an int tick of a whole note, `TICKS_PER_WHOLE = 6720` (divisible for

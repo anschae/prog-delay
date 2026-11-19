@@ -1,5 +1,8 @@
 #include "SoundModeRegistry.h"
 #include "DigitalMode.h"
+#include "TapeMode.h"
+#include "AnalogMode.h"
+#include "LoFiMode.h"
 
 namespace progdelay
 {
@@ -7,6 +10,9 @@ SoundModeRegistry::SoundModeRegistry()
 {
     // ---- Registration: APPEND new modes at the end, never reorder or remove. ----
     add<DigitalMode>();
+    add<TapeMode>();
+    add<AnalogMode>();
+    add<LoFiMode>();
 }
 
 const SoundModeRegistry& SoundModeRegistry::get()
