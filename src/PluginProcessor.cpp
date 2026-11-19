@@ -37,12 +37,21 @@ ProgDelayProcessor::ProgDelayProcessor()
     c_stereoMode = raw (pid::stereoMode);
     c_tone = raw (pid::tone);
 
+    d_on = raw (pid::duckOn); d_source = raw (pid::duckSource); d_hp = raw (pid::duckHP); d_lp = raw (pid::duckLP);
+    d_det = raw (pid::duckDetMode); d_rms = raw (pid::duckRms); d_thresh = raw (pid::duckThresh);
+    d_depth = raw (pid::duckDepth); d_full = raw (pid::duckFull); d_knee = raw (pid::duckKnee);
+    d_attack = raw (pid::duckAttack); d_hold = raw (pid::duckHold); d_release = raw (pid::duckRelease);
+    d_relSync = raw (pid::duckRelSync); d_relNote = raw (pid::duckRelNote); d_look = raw (pid::duckLook);
+    d_target = raw (pid::duckTarget); d_pos = raw (pid::duckPos);
+
     bank.getTree().addListener (this);
     publishPatterns();
+    startTimerHz (10);
 }
 
 ProgDelayProcessor::~ProgDelayProcessor()
 {
+    stopTimer();
     bank.getTree().removeListener (this);
 }
 
@@ -72,7 +81,16 @@ bool ProgDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 
 void ProgDelayProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    currentSampleRate = sampleRate;
     engine.prepare (sampleRate, samplesPerBlock);
+    setLatencySamples (Engine::lookaheadSamplesFor (d_look->load(), sampleRate));
+}
+
+void ProgDelayProcessor::timerCallback()
+{
+    const int lat = Engine::lookaheadSamplesFor (d_look->load(), currentSampleRate);
+    if (lat != getLatencySamples())
+        setLatencySamples (lat);
 }
 
 void ProgDelayProcessor::reset()
@@ -108,6 +126,25 @@ Engine::Settings ProgDelayProcessor::readSettings() const noexcept
     s.age = c_age->load() * 0.01f;
     s.tone = c_tone->load() / 6.0f;
     s.colorRefl = c_colorRefl->load() > 0.5f;
+
+    s.duck.on = d_on->load() > 0.5f;
+    s.duck.hpHz = d_hp->load();
+    s.duck.lpHz = d_lp->load();
+    s.duck.mode = (DetMode) juce::roundToInt (d_det->load());
+    s.duck.rmsMs = d_rms->load();
+    s.duck.threshDb = d_thresh->load();
+    s.duck.depthDb = d_depth->load();
+    s.duck.full = d_full->load() > 0.5f;
+    s.duck.kneeDb = d_knee->load();
+    s.duck.attackMs = d_attack->load();
+    s.duck.holdMs = d_hold->load();
+    s.duck.releaseMs = d_release->load();
+    s.duckSource = (DuckSource) juce::roundToInt (d_source->load());
+    s.duckTarget = (DuckTarget) juce::roundToInt (d_target->load());
+    s.duckPos = (DuckPos) juce::roundToInt (d_pos->load());
+    s.duckRelSync = d_relSync->load() > 0.5f;
+    s.duckRelNote = juce::roundToInt (d_relNote->load());
+    s.lookaheadMs = d_look->load();
     return s;
 }
 
@@ -137,7 +174,15 @@ void ProgDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 #endif
     juce::ignoreUnused (midi);
 
-    engine.process (mainOut, numIn, HostTiming::fromPlayHead (getPlayHead()), readSettings(), midiPattern);
+    const juce::AudioBuffer<float>* sc = nullptr;
+    juce::AudioBuffer<float> scBuf;
+    if (getBusCount (true) > 1 && getBus (true, 1)->isEnabled())
+    {
+        scBuf = getBusBuffer (buffer, true, 1);  // a view, no allocation
+        if (scBuf.getNumChannels() > 0)
+            sc = &scBuf;
+    }
+    engine.process (mainOut, numIn, HostTiming::fromPlayHead (getPlayHead()), readSettings(), midiPattern, sc);
 }
 
 double ProgDelayProcessor::getTailLengthSeconds() const

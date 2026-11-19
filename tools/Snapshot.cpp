@@ -81,8 +81,21 @@ int main (int argc, char* argv[])
 
     std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
     ed->setVisible (true);
-    pump (400);
-    proc.processBlock (buf, midi);
+    if (auto* pe = dynamic_cast<progdelay::ProgDelayEditor*> (ed.get()))
+    {
+        pe->getView().model.selectedTick = progdelay::straightTick (3, 8);
+        pe->getView().model.notify();
+    }
+    pump (200);
+    for (int b = 0; b < 400; ++b)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < 512; ++i)
+                buf.setSample (ch, i, (b % 60 < 12) ? (rng.nextFloat() - 0.5f) * (0.2f + 0.02f * (float) (b % 60)) : 0.0f);
+        proc.processBlock (buf, midi);
+        if (b % 8 == 0)
+            pump (15);
+    }
     pump (200);
     save (*ed, out.getChildFile ("editor.png"));
     save (*ed, out.getChildFile ("editor@2x.png"), 2.0f);

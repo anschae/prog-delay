@@ -36,8 +36,10 @@ public:
     void prepare (double sampleRate);
     void reset() noexcept;
 
-    /** s1 in, s2 out (n <= kMaxChunk). */
-    void process (const float* s1L, const float* s1R, float* s2L, float* s2R, int n, const Params& p) noexcept;
+    /** s1 in, s2 out (n <= kMaxChunk). feedGain (optional) scales s1 on its way into the
+        loop ("Pre" ducking of stage 2). */
+    void process (const float* s1L, const float* s1R, float* s2L, float* s2R, int n, const Params& p,
+                  const float* feedGain = nullptr) noexcept;
 
     ModeHost& getModeHost() noexcept { return modes; }
     double getMaxBarSamples() const noexcept { return maxBar; }

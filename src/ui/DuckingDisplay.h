@@ -1,25 +1,28 @@
 #pragma once
+#include <vector>
 #include "Theme.h"
+#include "dsp/Ducker.h"
 
 namespace progdelay
 {
 class ProgDelayProcessor;
 
-/** Scrolling detector level, threshold line and gain-reduction curve (milestone 6). */
-class DuckingDisplay : public juce::Component
+/** Scrolling history of the detector level, the threshold line and the
+    gain-reduction curve, plus a GR readout. Fed by the ducker's lock-free FIFO. */
+class DuckingDisplay : public juce::Component, public juce::SettableTooltipClient, private juce::Timer
 {
 public:
-    explicit DuckingDisplay (ProgDelayProcessor& p) : proc (p) {}
-    void paint (juce::Graphics& g) override
-    {
-        auto r = getLocalBounds().toFloat();
-        g.setColour (theme::plot);
-        g.fillRoundedRectangle (r, 5.0f);
-        g.setColour (theme::panelEdge);
-        g.drawRoundedRectangle (r.reduced (0.5f), 5.0f, 1.0f);
-    }
+    explicit DuckingDisplay (ProgDelayProcessor& p);
+    void paint (juce::Graphics&) override;
 
 private:
+    void timerCallback() override;
+    float dbToY (float db, juce::Rectangle<float> r) const;
+
     ProgDelayProcessor& proc;
+    static constexpr int kHistory = 400;   // frames of 10 ms = 4 s
+    std::vector<Ducker::Frame> history;
+    int writePos = 0;
+    std::vector<Ducker::Frame> scratch;
 };
 } // namespace progdelay

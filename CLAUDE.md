@@ -11,6 +11,7 @@ up to date with every change: later sessions rely on it instead of re-reading th
   state round trip, undo/redo, randomization; tests in tests/PatternTests.cpp).
 - M5 stage 2 + sound modes: done (FeedbackStage, ModeHost crossfade, Color reflections; tests in
   tests/FeedbackTests.cpp).
+- M6 ducking: done (Ducker + DuckingDisplay, sidechain bus, lookahead latency; tests in tests/DuckerTests.cpp).
 - M3 grids: done. Full editor layout (header, tabs, toolbar, volume/pan grids, randomize panel, bottom
   sections). Sound mode classes are registered (DSP used from M5 on).
 
@@ -111,6 +112,26 @@ tools/Snapshot.cpp      renders the editor to PNG (`xvfb-run -a .../ProgDelaySna
   + drift, signal-gated hiss, glide), Analog/BBD (pre/post LP, S&H clock 46→16 kHz, compander with
   fast/slow envelope mismatch, triangle chorus 90° apart, gated noise), Lo-Fi (HP/LP band-limit,
   S&H 26→5 kHz with age jitter, 15→5 bits, wobble).
+
+- **Ducking** (`dsp/Ducker.*`): `DuckDetector` (HP/LP SVF on the detector only, stereo-linked
+  peak envelope with 20 ms decay, or RMS = one-pole mean square over the window) → `Ducker`
+  gain computer `targetReductionDb` = depth × smoothstep through the knee (binary at knee 0;
+  full duck = -80 dB floor → gain 0) → ballistics in dB (attack one-pole; hold counter reset
+  while reduction increases; release one-pole; tempo-synced release resolved in the engine from
+  `kRelNoteWholes`, last entry = one host bar) → linear gain per sample.
+  Application: `DuckApplier` interface, `BroadbandApplier` multiplies. **Band-limited ducking
+  later:** add a `BandApplier` (crossover split, gain on one band, sum) and use it for
+  `duckS1/duckS2` in `Engine`; detector and gain computer stay unchanged.
+  Engine wiring: detector sees the *undelayed* input (or the sidechain bus); everything else
+  (dry too) goes through the lookahead delay (`Engine::lookaheadSamplesFor`, ≤ 10 ms). The
+  processor reports it with `setLatencySamples` in `prepareToPlay` and from a 10 Hz Timer on the
+  message thread (never from the audio thread). Post = gains on the s1/s2 output contributions
+  (the loop is not affected); Pre + S1/Both = gain on the mono stage-1 input; Pre + S2 = gain on
+  the s1 feed into the loop (`FeedbackStage::process` feedGain).
+  Display: `Ducker` pushes one {levelDb, grDb} frame per 10 ms into an `AbstractFifo`;
+  `ui/DuckingDisplay` reads it at 30 Hz (4 s history). The FIFO drops frames when nobody reads.
+- Sidechain: third bus "Sidechain" (stereo, disabled by default) in the processor; used when
+  Duck Source = Sidechain and the bus is enabled, else the input is the detector.
 
 ## Parameters (APVTS, version hint 1)
 `mix dry wet killDry width feedback fbBarMode fbBarNum fbBarDen s1Level s2Level lowCut highCut

@@ -7,7 +7,8 @@
 namespace progdelay
 {
 class ProgDelayProcessor : public juce::AudioProcessor,
-                           private juce::ValueTree::Listener
+                           private juce::ValueTree::Listener,
+                           private juce::Timer
 {
 public:
     ProgDelayProcessor();
@@ -57,6 +58,7 @@ private:
     void valueTreeRedirected (juce::ValueTree&) override { publishPatterns(); }
 
     Engine::Settings readSettings() const noexcept;
+    void timerCallback() override;  // reports lookahead latency changes (message thread)
 
     juce::AudioProcessorValueTreeState apvts;
     PatternBank bank;
@@ -67,6 +69,10 @@ private:
 
     std::atomic<float> *pMix, *pDry, *pWet, *pKillDry, *pWidth, *pS1, *pS2, *pTempoMode, *pManualBpm,
                        *pActive, *pSwitchSource, *pSwitchQuant, *pFallback, *pFeedback;
+    std::atomic<float> *d_on = nullptr, *d_source = nullptr, *d_hp = nullptr, *d_lp = nullptr, *d_det = nullptr, *d_rms = nullptr,
+        *d_thresh = nullptr, *d_depth = nullptr, *d_full = nullptr, *d_knee = nullptr, *d_attack = nullptr, *d_hold = nullptr,
+        *d_release = nullptr, *d_relSync = nullptr, *d_relNote = nullptr, *d_look = nullptr, *d_target = nullptr, *d_pos = nullptr;
+    double currentSampleRate = 48000.0;
     std::atomic<float> *c_age = nullptr, *c_character = nullptr, *c_colorRefl = nullptr, *c_fbBarDen = nullptr, *c_fbBarMode = nullptr, *c_fbBarNum = nullptr, *c_highCut = nullptr, *c_lowCut = nullptr, *c_soundMode = nullptr, *c_stereoMode = nullptr, *c_tone = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProgDelayProcessor)

@@ -138,8 +138,9 @@ void RandomizePanel::paint (juce::Graphics& g)
     const float p = has ? (float) rt.getProperty (ids::pan) : 0.0f;
     const bool trip = has && classifyTick (tick) == ReflType::Triplet;
 
+    const int rowH = rows.getHeight() / 4;
     auto row = [&] (const juce::String& k, const juce::String& val, juce::Colour c) {
-        auto r = rows.removeFromTop (rows.getHeight() / 4 + 1);
+        auto r = rows.removeFromTop (rowH);
         g.setFont (font (14.0f));
         g.setColour (textDim);
         g.drawText (k, r, juce::Justification::centredLeft);

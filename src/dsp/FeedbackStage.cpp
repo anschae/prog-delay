@@ -25,7 +25,8 @@ void FeedbackStage::reset() noexcept
     first = true;
 }
 
-void FeedbackStage::process (const float* s1L, const float* s1R, float* s2L, float* s2R, int n, const Params& p) noexcept
+void FeedbackStage::process (const float* s1L, const float* s1R, float* s2L, float* s2R, int n, const Params& p,
+                             const float* feedGain) noexcept
 {
     jassert (n <= kMaxChunk);
     const double minB = kMaxChunk + 8.0;
@@ -115,8 +116,9 @@ void FeedbackStage::process (const float* s1L, const float* s1R, float* s2L, flo
     // 3) write s1 + s2
     for (int i = 0; i < n; ++i)
     {
-        line.write (0, t0 + i, s1L[i] + s2L[i]);
-        line.write (1, t0 + i, s1R[i] + s2R[i]);
+        const float fg = feedGain != nullptr ? feedGain[i] : 1.0f;
+        line.write (0, t0 + i, s1L[i] * fg + s2L[i]);
+        line.write (1, t0 + i, s1R[i] * fg + s2R[i]);
     }
     line.advance (n);
 

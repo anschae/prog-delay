@@ -18,6 +18,10 @@ void Engine::prepare (double sr, int /*maxBlockSize*/)
     stage1.prepare (sr);
     stage2.prepare (sr);
     colorHost.prepare (sr);
+    ducker.prepare (sr);
+    duckS1.prepare (sr);
+    duckS2.prepare (sr);
+    lookahead.prepare (2, (int64_t) (sr * 0.011) + 2 * kChunk);
     for (auto* v : { &dryGain, &wetGain, &s1Gain, &s2Gain, &widthS, &colorMix })
         v->reset (sr, 0.02);
     reset();
@@ -28,6 +32,8 @@ void Engine::reset()
     stage1.reset();
     stage2.reset();
     colorHost.reset();
+    ducker.reset();
+    lookahead.clear();
     switcher.reset (stage1.getActivePattern());
     if (! bankInitialised)
     {
@@ -47,7 +53,7 @@ void Engine::acquireBank() noexcept
 }
 
 void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTiming& host,
-                      const Settings& s, std::optional<int> midiPattern) noexcept
+                      const Settings& s, std::optional<int> midiPattern, const juce::AudioBuffer<float>* sidechain) noexcept
 {
     const int numSamples = buffer.getNumSamples();
     if (buffer.getNumChannels() < 2 || numSamples == 0)
@@ -87,7 +93,23 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
     si.midiPattern = midiPattern;
     const auto switchAt = switcher.process (si, clock, *banks[bankIndex], stage1.getActivePattern(), sampleRate, numSamples);
     if (switchAt.has_value())
-        stage1.switchTo (switcher.getTarget(), stage1.now() + *switchAt);
+        stage1.switchTo (switcher.getTarget(), stage1.now() + *switchAt - lookSamples);
+
+    // ---- ducking
+    DuckParams dp = s.duck;
+    if (s.duckRelSync)
+    {
+        double wholes = kRelNoteWholes[juce::jlimit (0, 4, s.duckRelNote)];
+        if (wholes <= 0.0)
+            wholes = (double) clock.getSigNum() / clock.getSigDen();  // one bar
+        dp.releaseMs = (float) (wholes * secondsPerWhole (clock.getBpm()) * 1000.0);
+    }
+    lookSamples = lookaheadSamplesFor (s.lookaheadMs, sampleRate);
+    const bool useSidechain = s.duckSource == DuckSource::Sidechain && sidechain != nullptr
+                           && sidechain->getNumChannels() > 0 && sidechain->getNumSamples() >= numSamples;
+    const bool pre = s.duckPos == DuckPos::Pre;
+    const bool duckS1Target = s.duckTarget != DuckTarget::Stage2;
+    const bool duckS2Target = s.duckTarget != DuckTarget::Stage1;
 
     // ---- gains
     const float mix = juce::jlimit (0.0f, 1.0f, s.mix);
@@ -111,12 +133,45 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
         float* L = outL + start;
         float* R = outR + start;
 
-        for (int i = 0; i < n; ++i)
+        if (monoIn)
+            std::copy (L, L + n, R);
+
+        // detector (on the undelayed signal: that is what makes the lookahead work)
+        const float* detL = L;
+        const float* detR = R;
+        if (useSidechain)
         {
-            if (monoIn)
-                R[i] = L[i];
-            mono[(size_t) i] = 0.5f * (L[i] + R[i]);
+            const int scCh = sidechain->getNumChannels();
+            std::copy (sidechain->getReadPointer (0, start), sidechain->getReadPointer (0, start) + n, scL.begin());
+            std::copy (sidechain->getReadPointer (std::min (1, scCh - 1), start),
+                       sidechain->getReadPointer (std::min (1, scCh - 1), start) + n, scR.begin());
+            detL = scL.data();
+            detR = scR.data();
         }
+        ducker.process (detL, detR, n, dp, duckGain.data());
+
+        // lookahead: delay everything else (dry included); the latency is reported to the host
+        if (lookSamples > 0 || lookahead.now() > 0)
+        {
+            const int64_t t0 = lookahead.now();
+            for (int i = 0; i < n; ++i)
+            {
+                lookahead.write (0, t0 + i, L[i]);
+                lookahead.write (1, t0 + i, R[i]);
+            }
+            lookahead.advance (n);
+            for (int i = 0; i < n; ++i)
+            {
+                L[i] = lookahead.at (0, t0 + i - lookSamples);
+                R[i] = lookahead.at (1, t0 + i - lookSamples);
+            }
+        }
+
+        for (int i = 0; i < n; ++i)
+            mono[(size_t) i] = 0.5f * (L[i] + R[i]);
+        if (pre && duckS1Target)
+            for (int i = 0; i < n; ++i)
+                mono[(size_t) i] *= duckGain[(size_t) i];
 
         stage1.process (mono.data(), s1L.data(), s1R.data(), n);
 
@@ -134,7 +189,15 @@ void Engine::process (juce::AudioBuffer<float>& buffer, int numIn, const HostTim
             }
         }
 
-        stage2.process (s1L.data(), s1R.data(), s2L.data(), s2R.data(), n, fp);
+        stage2.process (s1L.data(), s1R.data(), s2L.data(), s2R.data(), n, fp,
+                        pre && s.duckTarget == DuckTarget::Stage2 ? duckGain.data() : nullptr);
+        if (! pre)
+        {
+            if (duckS1Target)
+                duckS1.apply (s1L.data(), s1R.data(), duckGain.data(), n);
+            if (duckS2Target)
+                duckS2.apply (s2L.data(), s2R.data(), duckGain.data(), n);
+        }
 
         for (int i = 0; i < n; ++i)
         {
