@@ -65,7 +65,7 @@ ctest --test-dir build -C Release
 1. **Skeleton & CI** ← *done*
 2. **Stage 1 DSP** (multi-tap, tempo sync, tap math tests) ← *done*
 3. **Volume and pan grids** ← *done*
-4. Patterns: 8 slots, switching, state, undo/redo, randomisation
+4. **Patterns**: 8 slots, switching, state, undo/redo, randomisation ← *done*
 5. Stage 2 (feedback) and sound modes
 6. Ducking
 7. Polish: presets, tooltips, resizing, performance

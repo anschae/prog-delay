@@ -7,6 +7,8 @@ up to date with every change: later sessions rely on it instead of re-reading th
 - M1 skeleton & CI: done (CI green on Linux/macOS/Windows).
 - M2 stage 1 DSP: done. Engine with multi-tap stage, tempo sync/manual, pattern switcher, state
   serializer, pattern bank model.
+- M4 patterns: done (8 slots, automation / follow-sig switching, quantize, tail-preserving switching,
+  state round trip, undo/redo, randomization; tests in tests/PatternTests.cpp).
 - M3 grids: done. Full editor layout (header, tabs, toolbar, volume/pan grids, randomize panel, bottom
   sections). Sound mode classes are registered (DSP used from M5 on).
 
